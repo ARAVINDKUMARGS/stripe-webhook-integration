@@ -1,0 +1,31 @@
+{
+  "name": "stripe-webhook-integration",
+  "version": "1.0.0",
+  "description": "Secure Stripe webhook receiver (Node.js + Express) for checkout.session.completed events, with structured JSONL logging and optional API forwarding.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-reporter=spec tests/webhook.test.js",
+    "pdf": "node scripts/generate-pdf.js"
+  },
+  "engines": {
+    "node": ">=18.2.0"
+  },
+  "keywords": [
+    "stripe",
+    "webhook",
+    "express",
+    "checkout"
+  ],
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "stripe": "^23.1.0"
+  },
+  "devDependencies": {
+    "marked": "^18.2.0"
+  }
+}

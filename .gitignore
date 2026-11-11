@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Secrets - never commit these
+.env
+.env.*
+!.env.example
+
+# Log files (keep the folder itself via .gitkeep)
+logs/*
+!logs/.gitkeep
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# npm / misc
+npm-debug.log*
+*.log
+coverage/

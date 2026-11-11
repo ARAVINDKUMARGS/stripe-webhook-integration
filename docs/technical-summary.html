@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Technical Summary: Secure Stripe Webhook Integration</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 18mm 15mm 18mm 15mm;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #24292f;
+    line-height: 1.55;
+    font-size: 13px;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  h1 {
+    font-size: 22px;
+    border-bottom: 2px solid #0969da;
+    padding-bottom: 8px;
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: #0969da;
+    page-break-after: avoid;
+  }
+  h2 {
+    font-size: 16px;
+    border-bottom: 1px solid #d0d7de;
+    padding-bottom: 6px;
+    margin-top: 24px;
+    margin-bottom: 12px;
+    color: #1f2328;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 14px;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    color: #24292f;
+    page-break-after: avoid;
+  }
+  p {
+    margin-top: 0;
+    margin-bottom: 10px;
+  }
+  ul, ol {
+    margin-top: 0;
+    margin-bottom: 12px;
+    padding-left: 22px;
+  }
+  li {
+    margin-bottom: 4px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    page-break-inside: avoid;
+  }
+  th, td {
+    border: 1px solid #d0d7de;
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background-color: #f6f8fa;
+    font-weight: 600;
+    color: #1f2328;
+  }
+  tr:nth-child(even) td {
+    background-color: #fafbfc;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 88%;
+    background-color: #eff1f3;
+    padding: 2px 5px;
+    border-radius: 4px;
+    color: #0550ae;
+  }
+  pre {
+    background-color: #f6f8fa;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 10px 14px;
+    overflow-x: auto;
+    font-size: 11.5px;
+    line-height: 1.45;
+    margin-top: 8px;
+    margin-bottom: 14px;
+    page-break-inside: avoid;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    color: #24292f;
+    font-size: inherit;
+  }
+  blockquote {
+    margin: 12px 0;
+    padding: 8px 14px;
+    color: #57606a;
+    border-left: 4px solid #0969da;
+    background-color: #f0f7ff;
+    border-radius: 0 4px 4px 0;
+  }
+  hr {
+    height: 1px;
+    border: none;
+    background-color: #d0d7de;
+    margin: 20px 0;
+  }
+  .header-card {
+    background-color: #f6f8fa;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background-color: #ddf4ff;
+    color: #0969da;
+    border: 1px solid #54aeff66;
+  }
+  .badge-success {
+    background-color: #dafbe1;
+    color: #1a7f37;
+    border-color: #4ac26b66;
+  }
+</style>
+</head>
+<body>
+<h1>Technical Summary: Secure Stripe Webhook Integration</h1>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Client</strong></td>
+<td>Zenith SaaS Startup Global</td>
+</tr>
+<tr>
+<td><strong>Project</strong></td>
+<td>Integrate Stripe Checkout and Payment API</td>
+</tr>
+<tr>
+<td><strong>Assignment</strong></td>
+<td>Secure Stripe payment webhook integration</td>
+</tr>
+<tr>
+<td><strong>Mode</strong></td>
+<td>Stripe test mode only</td>
+</tr>
+<tr>
+<td><strong>Deadline</strong></td>
+<td>13 November 2026</td>
+</tr>
+<tr>
+<td><strong>Stack</strong></td>
+<td>Node.js, Express.js, Stripe Node.js SDK, dotenv</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>1. Project Overview</h2>
+<p>This project is a backend service that receives webhook notifications from Stripe when a Checkout payment completes. It performs five jobs:</p>
+<ol>
+<li>Accepts <code>POST /webhook</code> requests using the <strong>raw</strong> request body.</li>
+<li><strong>Verifies</strong> the <code>Stripe-Signature</code> header with <code>stripe.webhooks.constructEvent()</code>; invalid requests receive HTTP 400.</li>
+<li>Handles <code>checkout.session.completed</code> events and extracts the payment details.</li>
+<li>Writes the details as one JSON object per line (JSONL) to a local log file.</li>
+<li><strong>Optionally forwards</strong> the details to an external API configured only through environment variables.</li>
+</ol>
+<p>There is no frontend. A <code>GET /health</code> endpoint reports that the service is running.</p>
+<p><strong>Scope note.</strong> The client has not supplied a forwarding endpoint, an API specification or a JSON schema. These were therefore <strong>not invented</strong>. Forwarding is disabled by default, and the default payload is the list of extracted fields from the brief. It can be replaced by editing one function once the client confirms a schema.</p>
+<hr>
+<h2>2. Architecture</h2>
+<pre><code>                    ┌───────────────────────────────────────────────┐
+  Stripe  ── POST ─▶│ Express app (src/server.js)                   │
+ (or Stripe CLI)    │   GET  /health          → 200 status ok       │
+                    │   POST /webhook ─▶ routes/webhook.js          │
+                    │        1. express.raw()  (raw bytes)          │
+                    │        2. verifyWebhookEvent()  ──bad──▶ 400  │
+                    │        3. live-mode / unsupported-type checks │
+                    │        4. duplicate check (event store)       │
+                    │        5. extract + mask e-mail               │
+                    │        6. logger.logEvent()  ──fail──▶ 500    │
+                    │        7. forwardService.forwardPayment()     │
+                    │             (failure is logged, still 200)    │
+                    │   errorHandler / notFoundHandler              │
+                    └───────────────────────────────────────────────┘
+                         │ logs/webhook-events.jsonl
+                         │ logs/forwarding-errors.jsonl
+                         ▼
+                 optional external API (FORWARD_URL)
+</code></pre>
+<h3>Module responsibilities</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>src/server.js</code></td>
+<td>Builds the app (<code>createApp</code>), validates startup settings, starts and stops the server</td>
+</tr>
+<tr>
+<td><code>src/routes/webhook.js</code></td>
+<td>The webhook request pipeline and HTTP status decisions</td>
+</tr>
+<tr>
+<td><code>src/services/stripeService.js</code></td>
+<td>Stripe client (test keys only), signature verification, field extraction, e-mail masking, duplicate-event store</td>
+</tr>
+<tr>
+<td><code>src/services/logger.js</code></td>
+<td>JSONL file logging plus console output</td>
+</tr>
+<tr>
+<td><code>src/services/forwardService.js</code></td>
+<td>Optional forwarding: configuration, timeout, status classification</td>
+</tr>
+<tr>
+<td><code>src/middleware/errorHandler.js</code></td>
+<td>Generic JSON errors and 404 handling</td>
+</tr>
+<tr>
+<td><code>tests/webhook.test.js</code></td>
+<td>40 automated tests</td>
+</tr>
+</tbody></table>
+<p>Settings are read from <code>process.env</code> when a function runs, not when a file is loaded. This keeps the code testable and avoids hardcoded values.</p>
+<hr>
+<h2>3. Dependencies</h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Version installed</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>express</code></td>
+<td>5.3.0</td>
+<td>HTTP server and routing</td>
+</tr>
+<tr>
+<td><code>stripe</code></td>
+<td>23.1.0</td>
+<td>Official Stripe SDK (signature verification)</td>
+</tr>
+<tr>
+<td><code>dotenv</code></td>
+<td>18.0.10</td>
+<td>Loads <code>.env</code> into environment variables</td>
+</tr>
+</tbody></table>
+<p>No other runtime dependencies. Tests use Node&#39;s built-in test runner (<code>node:test</code>), so there are no test dependencies. Runtime: Node.js 18.2 or newer (verified on Node v24.13.0 on Windows 11).</p>
+<hr>
+<h2>4. Endpoint Configuration</h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET</code></td>
+<td><code>/health</code></td>
+<td>Returns <code>200 {&quot;status&quot;:&quot;ok&quot;,&quot;service&quot;:...,&quot;uptime_seconds&quot;:...,&quot;timestamp&quot;:...}</code></td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/webhook</code></td>
+<td>Stripe webhook receiver. Body size limit 1 MB. Requires <code>Content-Type: application/json</code> and a <code>Stripe-Signature</code> header</td>
+</tr>
+<tr>
+<td>any other</td>
+<td></td>
+<td><code>404 {&quot;error&quot;:&quot;Not found.&quot;}</code></td>
+</tr>
+</tbody></table>
+<p>Environment variables are documented in <code>.env.example</code> and the README. Required: <code>STRIPE_SECRET_KEY</code> (test key) and <code>STRIPE_WEBHOOK_SECRET</code> (<code>whsec_...</code>). The server refuses to start if either is missing or malformed, or if a live key is supplied.</p>
+<h3>HTTP status policy for <code>POST /webhook</code></h3>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Status</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Valid, processed and logged</td>
+<td>200</td>
+<td>Stripe stops retrying</td>
+</tr>
+<tr>
+<td>Unsupported event type</td>
+<td>200</td>
+<td>Received correctly; nothing to do. A non-2xx would cause days of pointless retries</td>
+</tr>
+<tr>
+<td>Duplicate event ID</td>
+<td>200</td>
+<td>Already processed</td>
+</tr>
+<tr>
+<td>Live-mode event</td>
+<td>200</td>
+<td>Received but not accepted (test mode only)</td>
+</tr>
+<tr>
+<td>Invalid, missing or expired signature; non-JSON body</td>
+<td>400</td>
+<td>Caller cannot be trusted</td>
+</tr>
+<tr>
+<td>Log file cannot be written; server misconfigured</td>
+<td>500</td>
+<td>Stripe will retry later, so a payment record is never silently lost</td>
+</tr>
+<tr>
+<td>Forwarding failed</td>
+<td><strong>200</strong></td>
+<td>The event is verified and logged. A 500 would trigger Stripe retries and duplicates</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>5. Stripe Signature Verification</h2>
+<p>Stripe signs every webhook: the <code>Stripe-Signature</code> header contains a timestamp and an HMAC-SHA256 signature computed with the endpoint&#39;s signing secret over the <strong>exact raw body</strong>.</p>
+<p>Implementation points:</p>
+<ul>
+<li><code>express.raw({ type: &#39;application/json&#39;, limit: &#39;1mb&#39; })</code> is attached to the webhook route only, so the handler receives the original bytes as a <code>Buffer</code>. No global <code>express.json()</code> is registered before it, because parsing and re-serialising would change the bytes and break verification.</li>
+<li><code>stripe.webhooks.constructEvent(rawBody, signature, secret)</code> verifies the signature and rejects timestamps older than the SDK tolerance (5 minutes), which blocks replayed messages.</li>
+<li>A verification error returns <strong>HTTP 400</strong> with a generic message. The log records only the reason code <code>invalid_signature</code>, never the signature, the body or the secret.</li>
+<li>A missing header or a non-JSON content type also returns 400.</li>
+<li>A missing server secret is a <em>server</em> fault and returns 500, with a generic body that does not reveal which setting is missing.</li>
+</ul>
+<hr>
+<h2>6. JSON Payload Processing</h2>
+<p>For <code>checkout.session.completed</code> events the service extracts only:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>event_id</code></td>
+<td><code>event.id</code></td>
+</tr>
+<tr>
+<td><code>event_type</code></td>
+<td><code>event.type</code></td>
+</tr>
+<tr>
+<td><code>checkout_session_id</code></td>
+<td><code>data.object.id</code></td>
+</tr>
+<tr>
+<td><code>payment_intent_id</code></td>
+<td><code>data.object.payment_intent</code> (string, or <code>.id</code> if expanded)</td>
+</tr>
+<tr>
+<td><code>customer_email</code></td>
+<td><code>customer_details.email</code>, falling back to <code>customer_email</code>; <strong>masked by default</strong></td>
+</tr>
+<tr>
+<td><code>amount_total</code></td>
+<td><code>data.object.amount_total</code> (smallest currency unit, e.g. 2000 = 20.00)</td>
+</tr>
+<tr>
+<td><code>currency</code></td>
+<td><code>data.object.currency</code></td>
+</tr>
+<tr>
+<td><code>payment_status</code></td>
+<td><code>data.object.payment_status</code></td>
+</tr>
+</tbody></table>
+<p>Missing values become <code>null</code> (for example when no e-mail was entered or the session has no payment intent). Everything else in the Stripe object (name, address, phone, billing details) is never read into the log record.</p>
+<p><strong>Unsupported types</strong> (for example <code>payment_intent.succeeded</code>) are acknowledged with 200, logged as <code>event_ignored</code> with only the event ID and type, and are never forwarded.</p>
+<p><strong>Duplicate events</strong> are detected through an event-ID store with a two-method interface (<code>has</code>, <code>add</code>). The default implementation is in memory (bounded to 10,000 IDs). An ID is stored only after its log line has been written successfully, so a failed attempt can be retried by Stripe.</p>
+<hr>
+<h2>7. Logging</h2>
+<p>Two JSON Lines files are written to <code>logs/</code> (or <code>LOG_DIR</code>), and each record is also printed to the console.</p>
+<p><code>webhook-events.jsonl</code> example:</p>
+<pre><code class="language-json">{&quot;timestamp&quot;:&quot;2026-11-11T01:43:29.225Z&quot;,&quot;level&quot;:&quot;info&quot;,&quot;record_type&quot;:&quot;checkout_session_completed&quot;,&quot;event_id&quot;:&quot;evt_manual_001&quot;,&quot;event_type&quot;:&quot;checkout.session.completed&quot;,&quot;checkout_session_id&quot;:&quot;cs_test_manual_001&quot;,&quot;payment_intent_id&quot;:&quot;pi_test_manual_001&quot;,&quot;customer_email&quot;:&quot;a***@example.com&quot;,&quot;amount_total&quot;:4999,&quot;currency&quot;:&quot;inr&quot;,&quot;payment_status&quot;:&quot;paid&quot;}
+</code></pre>
+<p>Record types: <code>checkout_session_completed</code>, <code>event_ignored</code>, <code>event_duplicate</code>, <code>webhook_rejected</code>, <code>forwarding_succeeded</code>, <code>server_error</code>.</p>
+<p><code>forwarding-errors.jsonl</code> holds <strong>only</strong> failures (<code>record_type: forwarding_failed</code>) with <code>event_id</code>, <code>error_type</code>, <code>status_code</code>, <code>message</code>, <code>duration_ms</code> and <code>target_host</code>.</p>
+<p><strong>Data minimisation:</strong> the logs never contain the raw body, the signature header, API keys, the webhook secret, the auth header value, the full forwarding URL (only the host), or customer name/address. E-mail is masked (<code>j***@example.com</code>) unless <code>LOG_FULL_EMAIL=true</code>. Automated tests assert each of these.</p>
+<hr>
+<h2>8. Optional API Forwarding</h2>
+<p>Controlled entirely by environment variables: <code>FORWARD_ENABLED</code>, <code>FORWARD_URL</code>, <code>FORWARD_METHOD</code> (POST/PUT/PATCH), <code>FORWARD_TIMEOUT_MS</code> (default 5000; clamped to 100–30000), optional <code>FORWARD_AUTH_HEADER_NAME</code>/<code>_VALUE</code>, and <code>FORWARD_FULL_EMAIL</code>.</p>
+<ul>
+<li>Uses <code>fetch</code> with an <code>AbortController</code> timeout. Redirects are not followed.</li>
+<li>The function <strong>never throws</strong>; it returns a result object, so forwarding can never break the webhook response.</li>
+<li>Outcome classes: <code>success</code> (2xx), <code>redirect</code> (3xx), <code>rate_limited</code> (429), <code>client_error</code> (other 4xx), <code>server_error</code> (5xx), <code>timeout</code>, <code>network</code> (DNS/connection/TLS), <code>config</code> (bad settings).</li>
+<li>Failures are written to <code>forwarding-errors.jsonl</code> and the webhook still answers 200.</li>
+<li>The payload is built in one function, <code>buildForwardPayload()</code>. It currently sends the extracted fields. <strong>Replace it once the client supplies a schema.</strong></li>
+</ul>
+<hr>
+<h2>9. Security Practices</h2>
+<table>
+<thead>
+<tr>
+<th>Practice</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Authenticity</td>
+<td>Signature verified on the raw body for every request; timestamp tolerance blocks replay</td>
+</tr>
+<tr>
+<td>No hardcoded secrets</td>
+<td>All keys and secrets come from environment variables; <code>.env</code> is git-ignored; <code>.env.example</code> has placeholders only</td>
+</tr>
+<tr>
+<td>Test mode only</td>
+<td>Startup rejects non-test keys; live-mode events are ignored</td>
+</tr>
+<tr>
+<td>Fail closed</td>
+<td>Any verification failure returns 400 and does no processing</td>
+</tr>
+<tr>
+<td>Safe errors</td>
+<td>Callers see generic messages; details only in the server log; no stack traces</td>
+</tr>
+<tr>
+<td>Privacy</td>
+<td>E-mail masked by default; unused personal data is never read; full e-mail is an explicit opt-in (separately for log and forwarding)</td>
+</tr>
+<tr>
+<td>Secret-safe logging</td>
+<td>Auth header values and URL query strings are never logged</td>
+</tr>
+<tr>
+<td>Redirect safety</td>
+<td>Forwarding does not follow redirects, so credentials cannot be sent to another host</td>
+</tr>
+<tr>
+<td>Reduced fingerprinting</td>
+<td><code>X-Powered-By</code> header disabled</td>
+</tr>
+<tr>
+<td>Input limits</td>
+<td>1 MB body limit on the webhook route</td>
+</tr>
+<tr>
+<td>Idempotency</td>
+<td>Duplicate event IDs are skipped</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>10. Testing Procedure</h2>
+<ol>
+<li><strong>Automated:</strong> <code>npm test</code> (40 tests; signed with the Stripe SDK test helper; fake local external API; isolated log folder per test).</li>
+<li><strong>Process-level manual test:</strong> start <code>npm start</code>, call the endpoints with <code>curl</code>, generate a signed request, and inspect the log files.</li>
+<li><strong>Postman:</strong> import the collection and run it (health 200; fake and missing signature 400). Postman cannot create genuine signatures; this is expected.</li>
+<li><strong>Stripe CLI (genuine verification), to be run on the developer&#39;s machine:</strong>
+<code>stripe login</code> → <code>stripe listen --forward-to localhost:3000/webhook</code> (copy the <code>whsec_</code> secret to <code>.env</code>) → <code>npm start</code> → <code>stripe trigger checkout.session.completed</code> → check the terminals and <code>logs/webhook-events.jsonl</code>.</li>
+</ol>
+<hr>
+<h2>11. Results and Limitations</h2>
+<h3>Results (executed in the development environment, Node v24.13.0 on Windows)</h3>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Automated suite (<code>npm test</code>)</td>
+<td><strong>40 of 40 passed</strong>, 0 failed</td>
+</tr>
+<tr>
+<td>Mutation check: signature verification deliberately disabled</td>
+<td>4 tests failed as expected; after restoring, 40 of 40 passed (proves the tests detect broken security)</td>
+</tr>
+<tr>
+<td>Invalid / fake / tampered / expired signature</td>
+<td>HTTP 400, nothing logged as a payment, nothing forwarded</td>
+</tr>
+<tr>
+<td>Missing signature header; non-JSON content type</td>
+<td>HTTP 400</td>
+</tr>
+<tr>
+<td>Valid signed <code>checkout.session.completed</code></td>
+<td>HTTP 200; correct fields written to JSONL; e-mail masked; no name/address in logs</td>
+</tr>
+<tr>
+<td>Unsupported event type</td>
+<td>HTTP 200, logged as <code>event_ignored</code>, not forwarded</td>
+</tr>
+<tr>
+<td>Duplicate event ID</td>
+<td>HTTP 200 <code>duplicate:true</code>; logged once; forwarded once</td>
+</tr>
+<tr>
+<td>Forwarding failures (500, 400, 429, redirect, timeout, unreachable host, bad config)</td>
+<td>Webhook still HTTP 200; failure recorded in <code>forwarding-errors.jsonl</code> with the correct <code>error_type</code></td>
+</tr>
+<tr>
+<td>Log write failure</td>
+<td>HTTP 500; the same event succeeded when retried</td>
+</tr>
+<tr>
+<td>Startup safety</td>
+<td>Refuses to start with no settings or with a live key (exit code 1)</td>
+</tr>
+<tr>
+<td>Real server process (<code>npm start</code>) with <code>curl</code></td>
+<td>Health 200; unsigned 400; signed 200 with forwarding to a fake API (auth header delivered); duplicate skipped; graceful shutdown on SIGTERM</td>
+</tr>
+<tr>
+<td>Postman collection (run with Newman 6.2.3 against the live server)</td>
+<td>4 requests, 6 assertions, 0 failures</td>
+</tr>
+</tbody></table>
+<h3>Limitations (stated honestly)</h3>
+<ul>
+<li><strong>Stripe CLI test was not run by the assistant.</strong> It needs the developer&#39;s Stripe login and a connection to Stripe. Signed requests in the tests use the SDK&#39;s official test-signature helper and a fake secret, which exercises the real verification code but does not prove that Stripe&#39;s servers reached the machine. The developer must run the CLI steps in section 10 and record the result.</li>
+<li><strong>Postman Desktop was not used.</strong> The collection was validated as JSON and executed with Newman (Postman&#39;s official command-line runner), which parses the same format.</li>
+<li><strong>Tested on Node 22 only.</strong> Node 18.2+ is declared as the minimum but was not run.</li>
+<li><strong>Duplicate detection is in memory:</strong> lost on restart, not shared across several instances. Upgrade path: implement <code>has(id)</code>/<code>add(id)</code> against Redis or a database and call <code>setEventStore()</code>.</li>
+<li><strong>No automatic forwarding retries.</strong> A failed forward is logged but not re-sent. A queue with retries is a recommended extension if delivery must be guaranteed.</li>
+<li><strong>Forwarding is synchronous</strong> (the response to Stripe waits for the forward, at most the configured timeout, default 5 s). Moving it to a background queue is a sensible future improvement.</li>
+<li><strong>Out of scope for this assignment:</strong> HTTPS termination (provided by the host or a reverse proxy), rate limiting, log rotation, monitoring and alerting.</li>
+<li><strong>Client information still missing:</strong> forwarding URL, method, JSON schema, authentication method, whether forwarding is required, and whether full e-mail may be stored or sent.</li>
+</ul>
+
+</body>
+</html>

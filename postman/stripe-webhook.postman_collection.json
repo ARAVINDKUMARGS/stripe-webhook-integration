@@ -1,0 +1,318 @@
+{
+  "info": {
+    "name": "Stripe Webhook Integration (Test Mode)",
+    "description": "Requests for the Stripe webhook receiver.\n\nIMPORTANT - READ THIS FIRST\n---------------------------\nPostman CANNOT produce a genuine Stripe signature. Stripe creates the Stripe-Signature header with a secret that only Stripe (and your server) know. An unsigned or hand-made request therefore ALWAYS fails verification and gets HTTP 400. That is the CORRECT, secure behaviour, and the requests below prove it.\n\nGenuine signature verification is tested with the Stripe CLI:\n  1) stripe login\n  2) stripe listen --forward-to localhost:3000/webhook   (copy the whsec_... secret into .env, restart the server)\n  3) stripe trigger checkout.session.completed\nThen check the terminal output and logs/webhook-events.jsonl.\n\nUse Postman for: the health check, and proving that bad/missing signatures are rejected.\n\nVariables: change baseUrl if your server uses another port.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "description": "Where the Express server is running (npm start)."
+    },
+    {
+      "key": "fakeStripeSignature",
+      "value": "t=1700000000,v1=this_is_not_a_real_signature",
+      "type": "string",
+      "description": "A deliberately INVALID signature. Postman cannot create a real one."
+    },
+    {
+      "key": "sampleEventId",
+      "value": "evt_test_postman_0001",
+      "type": "string",
+      "description": "Example event ID used in the sample payload."
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health Check",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Body says status ok', function () {",
+              "    pm.expect(pm.response.json().status).to.eql('ok');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        },
+        "description": "Checks that the server is running. Expected: HTTP 200."
+      },
+      "response": [
+        {
+          "name": "200 OK - server is healthy",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            { "key": "Content-Type", "value": "application/json; charset=utf-8" }
+          ],
+          "cookie": [],
+          "body": "{\n  \"status\": \"ok\",\n  \"service\": \"stripe-webhook-integration\",\n  \"uptime_seconds\": 42,\n  \"timestamp\": \"2026-11-11T10:00:00.000Z\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "2. Webhook - Unsigned/Simulated Event (EXPECTED 400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// A fake signature MUST be rejected. Getting 400 means security works.",
+              "pm.test('Fake signature is rejected with 400', function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "pm.test('Error message says invalid signature', function () {",
+              "    pm.expect(pm.response.json().error).to.eql('Invalid Stripe signature.');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Stripe-Signature", "value": "{{fakeStripeSignature}}", "description": "Invalid on purpose. Real signatures can only be made by Stripe." }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{sampleEventId}}\",\n  \"object\": \"event\",\n  \"api_version\": \"2025-01-01\",\n  \"created\": 1700000000,\n  \"livemode\": false,\n  \"type\": \"checkout.session.completed\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"cs_test_postman_0001\",\n      \"object\": \"checkout.session\",\n      \"amount_total\": 2000,\n      \"currency\": \"usd\",\n      \"payment_status\": \"paid\",\n      \"payment_intent\": \"pi_test_postman_0001\",\n      \"customer_details\": {\n        \"email\": \"test.customer@example.com\"\n      }\n    }\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/webhook",
+          "host": ["{{baseUrl}}"],
+          "path": ["webhook"]
+        },
+        "description": "SAMPLE EVENT PAYLOAD (trimmed version of a real checkout.session.completed event) sent with a FAKE signature.\n\nExpected result: HTTP 400 {\"error\":\"Invalid Stripe signature.\"}\n\nWhy: Stripe signatures cannot be forged. This request proves the server rejects anything that does not come from Stripe. It CANNOT be made to return 200 from Postman. To see a 200, use the Stripe CLI (see collection description)."
+      },
+      "response": [
+        {
+          "name": "400 Bad Request - invalid signature (expected)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Stripe-Signature", "value": "t=1700000000,v1=this_is_not_a_real_signature" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"id\": \"evt_test_postman_0001\", \"type\": \"checkout.session.completed\" }"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook"]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "_postman_previewlanguage": "json",
+          "header": [
+            { "key": "Content-Type", "value": "application/json; charset=utf-8" }
+          ],
+          "cookie": [],
+          "body": "{\n  \"error\": \"Invalid Stripe signature.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "3. Webhook - Missing Stripe-Signature Header (EXPECTED 400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Missing signature header is rejected with 400', function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "pm.test('Error message mentions the missing header', function () {",
+              "    pm.expect(pm.response.json().error).to.eql('Missing Stripe-Signature header.');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{sampleEventId}}\",\n  \"type\": \"checkout.session.completed\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/webhook",
+          "host": ["{{baseUrl}}"],
+          "path": ["webhook"]
+        },
+        "description": "No Stripe-Signature header at all. Expected: HTTP 400 {\"error\":\"Missing Stripe-Signature header.\"}"
+      },
+      "response": [
+        {
+          "name": "400 Bad Request - header missing (expected)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"id\": \"evt_test_postman_0001\", \"type\": \"checkout.session.completed\" }"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook"]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "_postman_previewlanguage": "json",
+          "header": [
+            { "key": "Content-Type", "value": "application/json; charset=utf-8" }
+          ],
+          "cookie": [],
+          "body": "{\n  \"error\": \"Missing Stripe-Signature header.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "4. Reference - What a GENUINE webhook returns (do not send from Postman)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Stripe-Signature", "value": "<only Stripe CLI / Stripe can generate this>", "disabled": true }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"note\": \"Reference only. Run: stripe trigger checkout.session.completed\" }",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/webhook",
+          "host": ["{{baseUrl}}"],
+          "path": ["webhook"]
+        },
+        "description": "REFERENCE ONLY. This item exists to document the expected responses for genuine, correctly signed webhooks. Do not expect it to succeed from Postman. Use the Stripe CLI instead (see collection description).\n\nSee the saved examples below for each expected response."
+      },
+      "response": [
+        {
+          "name": "200 OK - checkout.session.completed processed",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/webhook", "host": ["{{baseUrl}}"], "path": ["webhook"] }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+          "cookie": [],
+          "body": "{\n  \"received\": true,\n  \"handled\": true,\n  \"forwarding\": \"disabled\"\n}"
+        },
+        {
+          "name": "200 OK - processed and forwarded (FORWARD_ENABLED=true)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/webhook", "host": ["{{baseUrl}}"], "path": ["webhook"] }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+          "cookie": [],
+          "body": "{\n  \"received\": true,\n  \"handled\": true,\n  \"forwarding\": \"succeeded\"\n}"
+        },
+        {
+          "name": "200 OK - logged, but forwarding failed (still 200 on purpose)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/webhook", "host": ["{{baseUrl}}"], "path": ["webhook"] }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+          "cookie": [],
+          "body": "{\n  \"received\": true,\n  \"handled\": true,\n  \"forwarding\": \"failed\"\n}"
+        },
+        {
+          "name": "200 OK - unsupported event type ignored",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/webhook", "host": ["{{baseUrl}}"], "path": ["webhook"] }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+          "cookie": [],
+          "body": "{\n  \"received\": true,\n  \"handled\": false,\n  \"reason\": \"unsupported_event_type\"\n}"
+        },
+        {
+          "name": "200 OK - duplicate event skipped",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/webhook", "host": ["{{baseUrl}}"], "path": ["webhook"] }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+          "cookie": [],
+          "body": "{\n  \"received\": true,\n  \"handled\": false,\n  \"duplicate\": true\n}"
+        },
+        {
+          "name": "500 Internal Server Error - could not write log (Stripe will retry)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/webhook", "host": ["{{baseUrl}}"], "path": ["webhook"] }
+          },
+          "status": "Internal Server Error",
+          "code": 500,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+          "cookie": [],
+          "body": "{\n  \"error\": \"Internal server error.\"\n}"
+        }
+      ]
+    }
+  ]
+}
