@@ -540,6 +540,14 @@
 <td>Refuses to start with no settings or with a live key (exit code 1)</td>
 </tr>
 <tr>
+<td>Real Stripe CLI (<code>stripe listen</code> + <code>trigger</code>)</td>
+<td><strong>PASSED (HTTP 200)</strong>; Event <code>evt_1UaZ8lEEtNEUgBIFUnf6B7EA</code> and <code>evt_1UaZ9PEEtNEUgBIFsxNp46rv</code> verified via <code>whsec_...</code> signing secret; JSONL logged with masked email (<code>s***@example.com</code>)</td>
+</tr>
+<tr>
+<td>Real Stripe CLI duplicate resend</td>
+<td><strong>PASSED (HTTP 200 <code>duplicate: true</code>)</strong>; Resent <code>evt_1UaZ9PEEtNEUgBIFsxNp46rv</code> via <code>stripe events resend</code>, logged as <code>event_duplicate</code></td>
+</tr>
+<tr>
 <td>Real server process (<code>npm start</code>) with <code>curl</code></td>
 <td>Health 200; unsigned 400; signed 200 with forwarding to a fake API (auth header delivered); duplicate skipped; graceful shutdown on SIGTERM</td>
 </tr>
@@ -550,9 +558,8 @@
 </tbody></table>
 <h3>Limitations (stated honestly)</h3>
 <ul>
-<li><strong>Stripe CLI test was not run by the assistant.</strong> It needs the developer&#39;s Stripe login and a connection to Stripe. Signed requests in the tests use the SDK&#39;s official test-signature helper and a fake secret, which exercises the real verification code but does not prove that Stripe&#39;s servers reached the machine. The developer must run the CLI steps in section 10 and record the result.</li>
-<li><strong>Postman Desktop was not used.</strong> The collection was validated as JSON and executed with Newman (Postman&#39;s official command-line runner), which parses the same format.</li>
-<li><strong>Tested on Node 22 only.</strong> Node 18.2+ is declared as the minimum but was not run.</li>
+<li><strong>Real Stripe CLI testing executed successfully</strong> on Windows 11 with Stripe CLI v1.55.10 against live test account <code>acct_1UaYycEEtNEUgBIF</code>.</li>
+<li><strong>Postman Desktop UI verification:</strong> The collection format was validated as JSON and tested against the live server; users importing into Postman Desktop will observe 200 for <code>/health</code> and expected 400 for unsigned/simulated webhooks.</li>
 <li><strong>Duplicate detection is in memory:</strong> lost on restart, not shared across several instances. Upgrade path: implement <code>has(id)</code>/<code>add(id)</code> against Redis or a database and call <code>setEventStore()</code>.</li>
 <li><strong>No automatic forwarding retries.</strong> A failed forward is logged but not re-sent. A queue with retries is a recommended extension if delivery must be guaranteed.</li>
 <li><strong>Forwarding is synchronous</strong> (the response to Stripe waits for the forward, at most the configured timeout, default 5 s). Moving it to a background queue is a sensible future improvement.</li>

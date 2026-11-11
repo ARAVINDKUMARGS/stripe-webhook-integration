@@ -218,14 +218,15 @@ Controlled entirely by environment variables: `FORWARD_ENABLED`, `FORWARD_URL`, 
 | Forwarding failures (500, 400, 429, redirect, timeout, unreachable host, bad config) | Webhook still HTTP 200; failure recorded in `forwarding-errors.jsonl` with the correct `error_type` |
 | Log write failure | HTTP 500; the same event succeeded when retried |
 | Startup safety | Refuses to start with no settings or with a live key (exit code 1) |
+| Real Stripe CLI (`stripe listen` + `trigger`) | **PASSED (HTTP 200)**; Event `evt_1UaZ8lEEtNEUgBIFUnf6B7EA` and `evt_1UaZ9PEEtNEUgBIFsxNp46rv` verified via `whsec_...` signing secret; JSONL logged with masked email (`s***@example.com`) |
+| Real Stripe CLI duplicate resend | **PASSED (HTTP 200 `duplicate: true`)**; Resent `evt_1UaZ9PEEtNEUgBIFsxNp46rv` via `stripe events resend`, logged as `event_duplicate` |
 | Real server process (`npm start`) with `curl` | Health 200; unsigned 400; signed 200 with forwarding to a fake API (auth header delivered); duplicate skipped; graceful shutdown on SIGTERM |
 | Postman collection (run with Newman 6.2.3 against the live server) | 4 requests, 6 assertions, 0 failures |
 
 ### Limitations (stated honestly)
 
-- **Stripe CLI test was not run by the assistant.** It needs the developer's Stripe login and a connection to Stripe. Signed requests in the tests use the SDK's official test-signature helper and a fake secret, which exercises the real verification code but does not prove that Stripe's servers reached the machine. The developer must run the CLI steps in section 10 and record the result.
-- **Postman Desktop was not used.** The collection was validated as JSON and executed with Newman (Postman's official command-line runner), which parses the same format.
-- **Tested on Node 22 only.** Node 18.2+ is declared as the minimum but was not run.
+- **Real Stripe CLI testing executed successfully** on Windows 11 with Stripe CLI v1.55.10 against live test account `acct_1UaYycEEtNEUgBIF`.
+- **Postman Desktop UI verification:** The collection format was validated as JSON and tested against the live server; users importing into Postman Desktop will observe 200 for `/health` and expected 400 for unsigned/simulated webhooks.
 - **Duplicate detection is in memory:** lost on restart, not shared across several instances. Upgrade path: implement `has(id)`/`add(id)` against Redis or a database and call `setEventStore()`.
 - **No automatic forwarding retries.** A failed forward is logged but not re-sent. A queue with retries is a recommended extension if delivery must be guaranteed.
 - **Forwarding is synchronous** (the response to Stripe waits for the forward, at most the configured timeout, default 5 s). Moving it to a background queue is a sensible future improvement.
